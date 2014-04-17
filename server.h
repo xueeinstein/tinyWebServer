@@ -26,6 +26,7 @@ void *respHttpQuery(void *param)
     if(recv(fd2, buf, sizeof(buf), 0)>0) {  
     	time_t timep;
 		time (&timep);
+		int isNotFound = 0; 
         len=strlen(buf);
         cout<<"got a HTTP query, content is: "<<endl<<buf<<endl;
         if(strstr(buf,"Accept: ")!=NULL)      // get http query type
@@ -47,6 +48,18 @@ void *respHttpQuery(void *param)
             strcpy(filename,PATH);
             strcat(filename,webname);
             int file_status = stat(filename,&st);
+            if (file_status == -1){
+            	// the query file doesn't exist in www
+            	// redirect to 404.html
+            	isNotFound = 1;
+            	*webname = '\0';
+            	*filename = '\0';
+            	strcpy(webname, "/404.html");
+            	strcpy(filename, PATH);
+            	strcat(filename, webname);
+            	file_status = stat(filename, &st);
+            	cout << "Not Found!!" << endl;
+            }
             char protocol[2048]={'\0'};
             char content_type[100]={'\0'};
             if(strncmp(webname,".png",4)==0) // temporally it only support .png picture               
@@ -56,11 +69,21 @@ void *respHttpQuery(void *param)
             {
                 strncpy(content_type,"Content-Type: text/html\r\n",strlen("Content-Type: text/html\r\n"));
             }
-            sprintf(protocol,"HTTP/1.1 200 OK\r\n"
+            if (isNotFound){
+            	sprintf(protocol,"HTTP/1.1 404 Not Found\r\n"
                     "Server: tinyWebServer/1.0\r\n"
                     "%s"
                     "Content-Length: %d bytes\r\n"
                     "Connection: keep-alive\r\n\r\n",content_type,(int)st.st_size);
+            }
+            else{
+            	sprintf(protocol,"HTTP/1.1 200 OK\r\n"
+                    "Server: tinyWebServer/1.0\r\n"
+                    "%s"
+                    "Content-Length: %d bytes\r\n"
+                    "Connection: keep-alive\r\n\r\n",content_type,(int)st.st_size);
+            }
+            cout << filename << endl;
             cout<<protocol<<endl;
             send(fd2,protocol,strlen(protocol),0); // send protocol header          
             size_t len=0;

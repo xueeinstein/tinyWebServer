@@ -58,7 +58,6 @@ void *respHttpQuery(void *param)
             	strcpy(filename, PATH);
             	strcat(filename, webname);
             	file_status = stat(filename, &st);
-            	cout << "Not Found!!" << endl;
             }
             char protocol[2048]={'\0'};
             char content_type[100]={'\0'};

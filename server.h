@@ -10,6 +10,7 @@
 #include <arpa/inet.h> // inet_ntop()
 #include <pthread.h>
 #include <fcntl.h> // define open(), fcntl() 
+#include <time.h>
 
 using namespace std;
 
@@ -22,7 +23,9 @@ void *respHttpQuery(void *param)
     char buf[1024]; // buffer to save the query
     char exname[100];
     int len;
-     if(recv(fd2, buf, sizeof(buf), 0)>0) {  
+    if(recv(fd2, buf, sizeof(buf), 0)>0) {  
+    	time_t timep;
+		time (&timep);
         len=strlen(buf);
         cout<<"got a HTTP query, content is: "<<endl<<buf<<endl;
         if(strstr(buf,"Accept: ")!=NULL)      // get http query type
@@ -37,47 +40,40 @@ void *respHttpQuery(void *param)
             char webname[100];
             char *p1=strchr(buf,' ');
             char *p2=strchr(p1+1,' ');
-            strncpy(webname,p1+1,p2-p1-1);       // get the filename that client query
-            cout << "query:" <<webname << endl;
+            strncpy(webname,p1+1,p2-p1-1);       // get the filename that client query, may contains direction
+            cout << "query:" <<webname << " at:" << ctime(&timep) << endl;
             struct stat st; // to save the struct stat buffer
             char filename[1024]={'\0'};
             strcpy(filename,PATH);
             strcat(filename,webname);
             int file_status = stat(filename,&st);
-            char protol[2048]={'\0'};
+            char protocol[2048]={'\0'};
             char content_type[100]={'\0'};
-            if(strncmp(webname,"/sword.jpg",10)==0)              
+            if(strncmp(webname,".png",4)==0) // temporally it only support .png picture               
             {
-                strncpy(content_type,"Content-Type: image/jpeg\r\n",strlen("Content-Type: image/jpeg\r\n"));
+                strncpy(content_type,"Content-Type: image/png\r\n",strlen("Content-Type: image/png\r\n"));
             }else
             {
                 strncpy(content_type,"Content-Type: text/html\r\n",strlen("Content-Type: text/html\r\n"));
             }
-            sprintf(protol,"HTTP/1.1 200 OK\r\n"
+            sprintf(protocol,"HTTP/1.1 200 OK\r\n"
                     "Server: tinyWebServer/1.0\r\n"
-                    "ETag: \"W/6381-1144994988000\"\r\n"
-                    "Last-Modified: Fri, 14 Apr 2006 06:09:48 GMT\r\n"
                     "%s"
                     "Content-Length: %d bytes\r\n"
-                    "Date: Mon, 19 Jun 2011 07:21:09 GMT\r\n"
                     "Connection: keep-alive\r\n\r\n",content_type,(int)st.st_size);
-            cout<<protol<<endl;
-            send(fd2,protol,strlen(protol),0);             
+            cout<<protocol<<endl;
+            send(fd2,protocol,strlen(protocol),0); // send protocol header          
             size_t len=0;
             char fbuf[1024]={'\0'};   
-                        const char*filename2="/home/user/sword2.jpeg";
-                        int fd4=open(filename2,O_WRONLY|O_CREAT,0777);
-            int fd=open(filename,O_RDONLY,0777);
+            int fd=open(filename,O_RDONLY,0777); // 
             while((len=read(fd,fbuf,sizeof(fbuf)))>0){
                 send(fd2,fbuf,len,0);
-
-                                write(fd4,fbuf,len);
             }
             close(fd);
-                        close(fd2);
+            close(fd2);
         }
     }
-        pthread_exit(NULL);
+        //pthread_exit(NULL); // noted this to keep server living
     return NULL;
 }
 

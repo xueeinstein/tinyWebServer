@@ -6,9 +6,10 @@ using namespace std;
 int main(){
 	int i;
 	char p[20];
+	cout << "Please input the port that you want to bind: ";
 	cin >> p;
 	server* s = new server(p, 5);
-	s->test();
+	//s->test();
 	if ((i = s->serverGetaddrinfo()) != 0)
 		return 0;
 	else
@@ -24,6 +25,7 @@ int main(){
 				cout << "server listening OK..." << endl;
 		}
 	}
+	cout << "press Ctrl + C to exit server." << endl;
 	s->serverWorking();
 	return 0;
 }

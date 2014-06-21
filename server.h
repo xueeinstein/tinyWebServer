@@ -16,33 +16,71 @@ using namespace std;
 
 const char PATH[] = "./www"; // set www path
 
+struct passedArg
+{
+    /* data */
+    int new_fd;
+    int* pActive;
+};
+
 void *respHttpQuery(void *param) 
 {
 
-    int fd2 = *(int*) param;     //the client sockid
+    int fd2 = ((passedArg*) param)->new_fd;     //the client sockid
+    int* pActive = ((passedArg*) param)->pActive;
+    (*pActive)++;
     char buf[1024]; // buffer to save the query
-    char exname[100];
-    int len;
     if(recv(fd2, buf, sizeof(buf), 0)>0) {  
     	time_t timep;
 		time (&timep);
 		int isNotFound = 0; 
-        len=strlen(buf);
         cout<<"got a HTTP query, content is: "<<endl<<buf<<endl;
-        if(strstr(buf,"Accept: ")!=NULL)      // get http query type
-        {
-        	char *pp=strstr(buf,"Accept: "); // locate substring, begin with 'Accept: '
-            char *p1=strchr(pp,' '); // locate first occurence of character ' ' in pp
-            char *p2=strchr(pp,','); // locate first occurence of character ',' in pp
-            strncpy(exname,p1+1,p2-p1-1); // get substring of pp to exname, e.g. text/html
-        }
-        cout<<"name:"<<exname<<endl;    
         if (strncmp(buf, "GET",3) == 0) {
             char webname[100];
             char *p1=strchr(buf,' ');
             char *p2=strchr(p1+1,' ');
             strncpy(webname,p1+1,p2-p1-1);       // get the filename that client query, may contains direction
             cout << "query:" <<webname << " at:" << ctime(&timep) << endl;
+            // check wheather webname contains GET var, like ?a=
+            // using the GET var ?sleep= to descide the sleep seconds 
+            char get = '?';
+            if (strstr(webname, &get) != NULL){
+            	cout << "Here contains GET var" << endl;
+            	char trueWebName[100];
+            	char sleep[6];
+            	char *p1=strchr(webname, '?');
+            	strncpy(trueWebName, webname, p1-webname);
+            	// get GET var
+
+            	char *p2=strstr(webname, "sleep=");
+            	char *p3=strchr(p1+1, '?');
+            	if (p3 == NULL){
+            		p3 = webname + (int)strlen(webname);
+            	}
+            	if (p2 == NULL)
+            		cout << "get p2 error" << endl;
+            	int len = strlen(webname) - 1;
+            	strncpy(sleep, p2+6, p3-p2-6);
+            	int sleep_time = atoi(sleep);
+            	// cout << "p2: " << p2 << endl;
+            	// cout << "p3: " << p3 << endl;
+            	// cout << "predict sleep time is: " << sleep << "&"<< sleep_time << endl;
+            	// sleep(sleep_time);
+            	// wait(3);
+            	// clock_t start, end;
+            	// double elapsed;
+            	// start = clock();
+            	// while(1){
+            		// len = 1;
+            		// end = clock();
+            		// elapsed = (double)(end - start);
+            		// cout << "elapsed: " << elapsed << endl;
+            		// if (elapsed > sleep_time * 100000)
+            			// break;
+            	// }
+                usleep(sleep_time * 1000000);
+            	strcpy(webname, trueWebName);
+            }
             struct stat st; // to save the struct stat buffer
             char filename[1024]={'\0'};
             strcpy(filename,PATH);
@@ -95,7 +133,8 @@ void *respHttpQuery(void *param)
             close(fd2);
         }
     }
-        //pthread_exit(NULL); // noted this to keep server living
+    pthread_exit(NULL); // noted this to keep server living
+    (*pActive)--;
     return NULL;
 }
 
@@ -107,6 +146,10 @@ private:
 	char* Port; // server binded port
 
 	int Backlog; // the num of connections allowed on the incoming queue
+
+	// pthread_mutex_t mutex;	
+
+    int active_connect; // the active connect , reflect the work load of this server
 
 	// socket info. port, IP...
 	struct addrinfo hints;  
@@ -141,6 +184,9 @@ public:
 	// coninuous working, to accept the connection from clients, send and receive msg
 	void serverWorking();
 
+    // get the number of active connection
+    int getActiveCon();
+
 	void test();
 };
 
@@ -148,6 +194,8 @@ server::server(char* bindingPort, int backlog)
 {
 	Port = bindingPort;
 	Backlog = backlog;
+	// pthread_mutex_init(&mutex, NULL);
+    active_connect = 0;
 }
 
 int server::serverGetaddrinfo()
@@ -202,22 +250,29 @@ int server::serverListening()
 
 void server::serverWorking()
 {
-	int new_fd;
+	// int new_fd;
+    struct passedArg passedArg;
 	char s[INET6_ADDRSTRLEN];
 	struct sockaddr_storage their_addr; // connector's address information
 	socklen_t sin_size;
 	while (1){
 		// main accept() loop
+		// pthread_mutex_lock(&mutex);
 		sin_size = sizeof(their_addr);
-		new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
-		if (new_fd == -1){
+		passedArg.new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
+        passedArg.pActive = &active_connect;
+		if (passedArg.new_fd == -1){
 			perror("accept");
 			continue;
 		}
 		inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
 		cout << "server: got connection from " << s << endl;
 		pthread_t id;
-		pthread_create(&id, NULL, respHttpQuery, &new_fd);
+        // active_connect++;
+		pthread_create(&id, NULL, respHttpQuery, &passedArg);
+        // active_connect--;
+		// pthread_mutex_unlock(&mutex);
+        cout << "Now num. of working is: " << this->getActiveCon() << endl;
 	}
 	close(sockfd);
 	return;
@@ -236,4 +291,9 @@ void* server::get_in_addr(struct sockaddr *sa)
 		return &(((struct sockaddr_in*)sa)->sin_addr);
 	}
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
+}
+
+int server::getActiveCon()
+{
+    return active_connect;
 }

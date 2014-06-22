@@ -11,7 +11,7 @@ using namespace std;
 // using server_info to record the server ability and binded port
 struct server_info
 {
-	server* s;
+	FILE* pfile;
 	char Port[10];
 	int active_con;
 	int ability;
@@ -31,7 +31,7 @@ private:
 	void updateStatus(); // update server cluster status
 
 public:
-	LoadBalancer(int max, char* bindingport, int backlog);
+	LoadBalancer(int max, char* bindingport, int backlog, int ifverbose);
 	~LoadBalancer();
 
 	void bootServers();
@@ -44,8 +44,8 @@ public:
 
 };
 
-LoadBalancer::LoadBalancer(int max, char* bindingport, int backlog) : 
-	server(bindingport, backlog)
+LoadBalancer::LoadBalancer(int max, char* bindingport, int backlog, int ifverbose) : 
+	server(bindingport, backlog, ifverbose)
 {
 	max_visual_server = max;
 	// bootServers();
@@ -115,29 +115,24 @@ void LoadBalancer::bootServers(){
 	port = atoi(Port);
 	char p[10];
 	struct server_info server_info;
-	server* ps[max_visual_server];
+	char command[30];
+	// sprintf(command, sizeof(command), "./node -p ");
+	strcpy(command, "./node -p");
 	for (i=0; i<max_visual_server; i++){
 		sprintf(p, "%d", ++port);
-
-		// ps[i] = new server(p, 5);
-		// if ((ps[i]->serverGetaddrinfo()) != 0){
-			// i--;
-			// break;
-		// }
-		// if ((ps[i]->serverBinding()) != 0){
-			// i--;
-			// break;
-		// }
-		// if ((ps[i]->serverListening()) != 0){
-			// i--;
-			// break;
-		// }
-		server_info.s = ps[i];
+		strcat(command, p);
+		server_info.pfile = popen(command, "r");
+		if (server_info.pfile == NULL){
+			i--;
+			break;
+		}
 		strcpy(server_info.Port, p);
 		server_info.active_con = 0;
 		server_info.ability = 1;
 		server_cluster.push_back(server_info);
+		strcpy(command, "./node -p");
 	}
+	return;
 }
 int LoadBalancer::selectServer(){
 	int i;
@@ -156,7 +151,13 @@ int LoadBalancer::selectServer(){
 void LoadBalancer::updateStatus(){
 	list<server_info>::iterator it;
 	for (it=server_cluster.begin(); it!=server_cluster.end(); it++){
-		it->active_con = it->s->getActiveCon();
+		fseek(it->pfile, 0, SEEK_END);
+		char c;
+		char active[8];
+		while((c=getc(it->pfile)) != ' '){
+			strcat(active, &c);
+		}
+		it->active_con = atoi(active);
 	}
 	return;
 }

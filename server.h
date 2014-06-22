@@ -19,11 +19,66 @@ using namespace std;
 
 const char PATH[] = "./www"; // set www path
 
+class server
+{
+private:
+    int Backlog; // the num of connections allowed on the incoming queue
+
+    // pthread_mutex_t mutex;   
+
+    // socket info. port, IP...
+    struct addrinfo hints;  
+
+    // server socket info. port, IP...
+    struct addrinfo *serverInfo;
+
+    // handle query
+    // void *respQuery(void * param){
+        // return;
+    // }
+protected:
+    char* Port; // server binded port
+
+    int active_connect; // the active connect , reflect the work load of this server
+
+    int sockfd; // the socket file descriptor
+
+    int verbose; // wheter to display verbose messages
+
+    // get sockaddr, IPv4 or IPv6:
+    void *get_in_addr(struct sockaddr *sa);
+
+public:
+    // constructor, initial Port, Backlog, serveraddr 
+    server(char* bindingPort, int backlog, int ifverbose=0);
+
+    // free the addrinfo
+    ~server(){};
+
+    // getaddrinfo, if success, return 0, else return 1
+    int serverGetaddrinfo();
+
+    //get socket file despriser & binding port, if success, return 0, else return 1
+    int serverBinding();
+
+    // listening port, if success, return 0, else return -1
+    int serverListening();
+
+    // coninuous working, to accept the connection from clients, send and receive msg
+    void serverWorking();
+
+    // get the number of active connection
+    int getActiveCon();
+
+    void test();
+};
+
 struct passedArg
 {
-    /* data */
     int new_fd;
     int* pActive;
+    int verbose;
+    server* pserver;
 };
 
 void *respHttpQuery(void *param) 
@@ -31,24 +86,30 @@ void *respHttpQuery(void *param)
 
     int fd2 = ((passedArg*) param)->new_fd;     //the client sockid
     int* pActive = ((passedArg*) param)->pActive;
+    int verbose = ((passedArg*) param)->verbose;
+    server* pserver = ((passedArg*) param)->pserver;
     (*pActive)++;
+    cout << "Now num. of working is: " << pserver->getActiveCon() << endl;
     char buf[1024]; // buffer to save the query
     if(recv(fd2, buf, sizeof(buf), 0)>0) {  
     	time_t timep;
 		time (&timep);
 		int isNotFound = 0; 
-        cout<<"got a HTTP query, content is: "<<endl<<buf<<endl;
+        if (verbose)
+            cout<<"got a HTTP query, content is: "<<endl<<buf<<endl;
         if (strncmp(buf, "GET",3) == 0) {
             char webname[100];
             char *p1=strchr(buf,' ');
             char *p2=strchr(p1+1,' ');
             strncpy(webname,p1+1,p2-p1-1);       // get the filename that client query, may contains direction
-            cout << "query:" <<webname << " at:" << ctime(&timep) << endl;
+            if (verbose)
+                cout << "query:" <<webname << " at:" << ctime(&timep) << endl;
             // check wheather webname contains GET var, like ?a=
             // using the GET var ?sleep= to descide the sleep seconds 
             char get = '?';
             if (strstr(webname, &get) != NULL){
-            	cout << "Here contains GET var" << endl;
+                if (verbose)
+            	    cout << "Here contains GET var" << endl;
             	char trueWebName[100];
             	char sleep[6];
             	char *p1=strchr(webname, '?');
@@ -60,7 +121,7 @@ void *respHttpQuery(void *param)
             	if (p3 == NULL){
             		p3 = webname + (int)strlen(webname);
             	}
-            	if (p2 == NULL)
+            	if (p2 == NULL && verbose)
             		cout << "get p2 error" << endl;
             	int len = strlen(webname) - 1;
             	strncpy(sleep, p2+6, p3-p2-6);
@@ -123,8 +184,10 @@ void *respHttpQuery(void *param)
                     "Content-Length: %d bytes\r\n"
                     "Connection: keep-alive\r\n\r\n",content_type,(int)st.st_size);
             }
-            cout << filename << endl;
-            cout<<protocol<<endl;
+            if (verbose){
+                cout << filename << endl;
+                cout<<protocol<<endl;
+            }
             send(fd2,protocol,strlen(protocol),0); // send protocol header          
             size_t len=0;
             char fbuf[1024]={'\0'};   
@@ -137,66 +200,17 @@ void *respHttpQuery(void *param)
         }
     }
     (*pActive)--;
+    cout << "Now num. of working is: " << pserver->getActiveCon() << endl;
     pthread_exit(NULL); // noted this to keep server living
     return NULL;
 }
 
-class server
-{
-private:
-	int Backlog; // the num of connections allowed on the incoming queue
 
-	// pthread_mutex_t mutex;	
-
-	// socket info. port, IP...
-	struct addrinfo hints;  
-
-	// server socket info. port, IP...
-	struct addrinfo *serverInfo;
-
-	// handle query
-	// void *respQuery(void * param){
-		// return;
-	// }
-protected:
-    char* Port; // server binded port
-
-    int active_connect; // the active connect , reflect the work load of this server
-
-    int sockfd; // the socket file descriptor
-
-    // get sockaddr, IPv4 or IPv6:
-    void *get_in_addr(struct sockaddr *sa);
-
-public:
-	// constructor, initial Port, Backlog, serveraddr 
-	server(char* bindingPort, int backlog);
-
-	// free the addrinfo
-	~server(){};
-
-	// getaddrinfo, if success, return 0, else return 1
-	int serverGetaddrinfo();
-
-	//get socket file despriser & binding port, if success, return 0, else return 1
-	int serverBinding();
-
-	// listening port, if success, return 0, else return -1
-	int serverListening();
-
-	// coninuous working, to accept the connection from clients, send and receive msg
-	void serverWorking();
-
-    // get the number of active connection
-    int getActiveCon();
-
-	void test();
-};
-
-server::server(char* bindingPort, int backlog)
+server::server(char* bindingPort, int backlog, int ifverbose)
 {
 	Port = bindingPort;
 	Backlog = backlog;
+    verbose = ifverbose;
 	// pthread_mutex_init(&mutex, NULL);
     active_connect = 0;
 }
@@ -208,7 +222,7 @@ int server::serverGetaddrinfo()
 	hints.ai_socktype = SOCK_STREAM; // set socket type as stream socket
 	hints.ai_flags = AI_PASSIVE; // fill in server host ip.
 	int r = getaddrinfo(NULL, const_cast<char*>(Port), &hints, &serverInfo);
-	if (r != 0){
+	if ((r != 0) && verbose){
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(r));
 	}
 	return r;
@@ -221,13 +235,13 @@ int server::serverBinding()
 	// find the first available ip, to bind.
 	for (p = serverInfo; p != NULL; p = p->ai_next)
 	{
-		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+		if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1 && verbose)
 		{
 			perror("server: socket");
 			continue;
 		}
 
-		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1)
+		if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1 && verbose)
 		{
 			close(sockfd);
 			perror("server: bind");
@@ -237,7 +251,7 @@ int server::serverBinding()
 		break;
 	}
 
-	if (p == NULL)
+	if (p == NULL && verbose)
 	{
 		fprintf(stderr, "server: failed to bind socket.\n");
 		return 1;
@@ -258,24 +272,27 @@ void server::serverWorking()
 	char s[INET6_ADDRSTRLEN];
 	struct sockaddr_storage their_addr; // connector's address information
 	socklen_t sin_size;
+    cout << "Now num. of working is: " << this->getActiveCon() << endl;
 	while (1){
 		// main accept() loop
 		// pthread_mutex_lock(&mutex);
 		sin_size = sizeof(their_addr);
 		passedArg.new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
         passedArg.pActive = &active_connect;
-		if (passedArg.new_fd == -1){
+        passedArg.verbose = verbose;
+        passedArg.pserver = this;
+		if (passedArg.new_fd == -1 && verbose){
 			perror("accept");
 			continue;
 		}
 		inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
-		cout << "server: got connection from " << s << endl;
+        if (verbose)
+		    cout << "server: got connection from " << s << endl;
 		pthread_t id;
         // active_connect++;
 		pthread_create(&id, NULL, respHttpQuery, &passedArg);
         // active_connect--;
 		// pthread_mutex_unlock(&mutex);
-        cout << "Now num. of working is: " << this->getActiveCon() << endl;
 	}
 	close(sockfd);
 	return;

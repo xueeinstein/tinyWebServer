@@ -4,12 +4,13 @@
 
 using namespace std;
 
-int main(){
+int main(int argc, char* argv[]){
 	int i;
-	char p[20];
-	cout << "Please input the port that you want to bind: ";
-	cin >> p;
-	server* s = new server(p, 5);
+	if (argc != 2){
+		cout << "Usage: node port-to-bind" << endl;
+		exit(1);
+	}
+	server* s = new server(argv[1], 5);
 	//s->test();
 	if ((i = s->serverGetaddrinfo()) != 0)
 		return 0;

@@ -1,10 +1,18 @@
-TARGET = server
-MAIN = main.cpp
+TARGET = cluster
+SINGLE = node
+CLUSTER= cluster.cpp
+NODE = node.cpp
 
-$(TARGET): $(MAIN)
+$(TARGET): $(CLUSTER)
 	$(CXX) -pthread  -o $@ $^
 
-update:
+$(SINGLE): $(NODE)
+	$(CXX) -pthread  -o $@ $^
+
+u:
 	rm $(TARGET);
 	#$(CXX) -pthread -v -o $(TARGET) $(MAIN)
-	$(CXX) -pthread -o $(TARGET) $(MAIN)
+	$(CXX) -pthread -o $(TARGET) $(CLUSTER)
+
+s:
+	$(CXX) -pthread -o $(SINGLE) $(NODE)

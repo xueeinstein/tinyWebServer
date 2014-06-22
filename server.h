@@ -1,3 +1,6 @@
+#ifndef SERVER_H
+#define SERVER_H
+
 #include <iostream>
 #include <sys/stat.h> // POSIX system call, return file attributes
 #include <sys/socket.h>
@@ -133,23 +136,17 @@ void *respHttpQuery(void *param)
             close(fd2);
         }
     }
-    pthread_exit(NULL); // noted this to keep server living
     (*pActive)--;
+    pthread_exit(NULL); // noted this to keep server living
     return NULL;
 }
 
 class server
 {
 private:
-	int sockfd;	// the socket file descriptor
-
-	char* Port; // server binded port
-
 	int Backlog; // the num of connections allowed on the incoming queue
 
 	// pthread_mutex_t mutex;	
-
-    int active_connect; // the active connect , reflect the work load of this server
 
 	// socket info. port, IP...
 	struct addrinfo hints;  
@@ -157,20 +154,26 @@ private:
 	// server socket info. port, IP...
 	struct addrinfo *serverInfo;
 
-	// get sockaddr, IPv4 or IPv6:
-	void *get_in_addr(struct sockaddr *sa);
-
 	// handle query
 	// void *respQuery(void * param){
 		// return;
 	// }
-	
+protected:
+    char* Port; // server binded port
+
+    int active_connect; // the active connect , reflect the work load of this server
+
+    int sockfd; // the socket file descriptor
+
+    // get sockaddr, IPv4 or IPv6:
+    void *get_in_addr(struct sockaddr *sa);
+
 public:
 	// constructor, initial Port, Backlog, serveraddr 
 	server(char* bindingPort, int backlog);
 
 	// free the addrinfo
-	~server();
+	~server(){};
 
 	// getaddrinfo, if success, return 0, else return 1
 	int serverGetaddrinfo();
@@ -297,3 +300,4 @@ int server::getActiveCon()
 {
     return active_connect;
 }
+#endif

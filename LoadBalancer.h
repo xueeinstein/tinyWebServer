@@ -26,7 +26,6 @@ private:
 
 	list<server_info> server_cluster; // record the avariable servers
 
-
 	void updateStatus(); // update server cluster status
 
 	void strRev(char* s); // reverse the string
@@ -66,7 +65,7 @@ void *loadBalance(void* param){
 		sockaddr_in server_addr;
 		server_addr.sin_family = AF_INET;
 		server_addr.sin_addr.s_addr = inet_addr(DEST_IP);
-		server_addr.sin_port = htons(pLB->selectServer()  + 1);
+		server_addr.sin_port = htons(pLB->selectServer());
 		// bzero(&(server_addr.sin_zero), 8);
 
 		int proxy_socketid = socket(AF_INET, SOCK_STREAM, 0);
@@ -213,11 +212,11 @@ void LoadBalancer::updateStatus(){
 		{
 			fseek(it->pfile, -count, SEEK_END);
 			c = getc(it->pfile);
-			if (isdigit(c)){
+			// if (isdigit(c)){
 				strncat(active, &c, 1);
-			}
-			if (c == ' ')
-				break;
+			// }
+			// if (c == ' ')
+				// break;
 		}
 		// reverse the active
 		strRev(active);

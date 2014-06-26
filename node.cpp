@@ -16,25 +16,29 @@ void print_usage(FILE* stream, int exit_code)
 		"	-h --help				Display this usage information.\n"
 		"	-p --port port_num			The port to bind.\n"
 		"	-o --output filename 			Write output to file.\n"
-		"	-v --verbose				Print verbose messages.\n");
+		"	-v --verbose				Print verbose messages.\n"
+		"	-c --connect LB				connect the Load Balancer.\n");
 	exit(exit_code);
 }
 int main(int argc, char* argv[]){
 	int i;
 	int next_option;
 	// a string listing valid short options letters
-	const char* const short_options = "hp:o:v";
+	const char* const short_options = "hp:o:vc:";
 	// an array describing valid long options
 	const struct option long_options[] = {
 		{"help", 0, NULL, 'h'},
 		{"port", 1, NULL, 'p'},
 		{"output", 1, NULL, 'o'},
 		{"verbose", 0, NULL, 'v'},
+		{"connect", 1, NULL, 'c'},
 		{NULL, 0, NULL, 0}
 	};
 	char* binding_port = NULL;
 	const char* output_filename = NULL;
 	int verbose = 0; // wheter to display verbose messages
+	int LB_port = 0;
+	int ifconnect = 0;
 	program_name = argv[0];
 
 	do{
@@ -52,6 +56,10 @@ int main(int argc, char* argv[]){
 			case 'v':
 				verbose = 1;
 				break;
+			case 'c':
+				ifconnect = 1;
+				LB_port = atoi(optarg);
+				break;
 			case '?':
 				print_usage(stdout, 1);
 				break;
@@ -62,8 +70,8 @@ int main(int argc, char* argv[]){
 		}
 
 	}while(next_option != -1);
-
-	server* s = new server(binding_port, 5, verbose);
+	cout << "LB_port: " << LB_port << " ifconnect: " << ifconnect << endl;
+	server* s = new server(binding_port, 5, ifconnect, LB_port, verbose);
 	//s->test();
 	if ((i = s->serverGetaddrinfo()) != 0)
 		return 0;

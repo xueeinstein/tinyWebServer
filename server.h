@@ -15,6 +15,7 @@
 #include <fcntl.h> // define open(), fcntl() 
 #include <time.h>
 
+#define DEST_IP "127.0.0.1"
 using namespace std;
 
 const char PATH[] = "./www"; // set www path
@@ -37,20 +38,29 @@ private:
         // return;
     // }
 protected:
-    char* Port; // server binded port
+    
 
     int active_connect; // the active connect , reflect the work load of this server
 
     int sockfd; // the socket file descriptor
 
+    int side_socket; // the side socket file descriptor, to commu. with LB or other severs 
+
     int verbose; // wheter to display verbose messages
+
+
+
+    sockaddr_in LB_addr;
 
     // get sockaddr, IPv4 or IPv6:
     void *get_in_addr(struct sockaddr *sa);
 
 public:
+    char* Port; // server binded port
+    int connect_port; // the port to connect the Load Balancer
+    int connect; // wheter to connect the Load Balancer
     // constructor, initial Port, Backlog, serveraddr 
-    server(char* bindingPort, int backlog, int ifverbose=0);
+    server(char* bindingPort, int backlog, int ifconnect=0, int cp=0, int ifverbose=0);
 
     // free the addrinfo
     ~server(){};
@@ -70,6 +80,8 @@ public:
     // get the number of active connection
     int getActiveCon();
 
+    void sendAciveCon();
+
     void test();
 };
 
@@ -83,12 +95,35 @@ struct passedArg
 
 void *respHttpQuery(void *param) 
 {
-
+    int side_socket;
+    sockaddr_in LB_addr;
+    side_socket = socket(AF_INET, SOCK_STREAM, 0);
+       
+        
     int fd2 = ((passedArg*) param)->new_fd;     //the client sockid
     int* pActive = ((passedArg*) param)->pActive;
     int verbose = ((passedArg*) param)->verbose;
     server* pserver = ((passedArg*) param)->pserver;
+
+    LB_addr.sin_family = AF_INET;
+    LB_addr.sin_addr.s_addr = inet_addr(DEST_IP);
+    LB_addr.sin_port = htons(pserver->connect_port);
+
     (*pActive)++;
+    // pserver->sendAciveCon();
+    if (pserver->connect){
+        int test = connect(side_socket, (struct sockaddr*)&LB_addr, sizeof(struct sockaddr));
+        if (test == -1)
+            cout << "connect error" << endl;
+        char side_buf[40];
+        strcpy(side_buf, pserver->Port);
+        char act[20];
+        sprintf(act, "%d", pserver->getActiveCon());
+        strncat(side_buf, " ", 1);
+        strncat(side_buf, act, strlen(act));
+        cout << "send LB msg: " << side_buf << endl;
+        send(side_socket, side_buf, sizeof(side_buf), 0);
+    }
     cout << "Now num. of working is: " << pserver->getActiveCon() << endl;
     char buf[1024]; // buffer to save the query
     if(recv(fd2, buf, sizeof(buf), 0)>0) {  
@@ -200,19 +235,38 @@ void *respHttpQuery(void *param)
         }
     }
     (*pActive)--;
+    if (pserver->connect){
+        side_socket = socket(AF_INET, SOCK_STREAM, 0);
+        int test = connect(side_socket, (struct sockaddr*)&LB_addr, sizeof(struct sockaddr));
+        if (test == -1)
+            cout << "decrease and send error" << endl;
+        char side_buf[40];
+        strcpy(side_buf, pserver->Port);
+        char act[20];
+        sprintf(act, "%d", pserver->getActiveCon());
+        strncat(side_buf, " ", 1);
+        strncat(side_buf, act, strlen(act));
+        cout << "send LB msg: " << side_buf << endl;
+        send(side_socket, side_buf, sizeof(side_buf), 0);
+    }
+    // pserver->sendAciveCon();
     cout << "Now num. of working is: " << pserver->getActiveCon() << endl;
     pthread_exit(NULL); // noted this to keep server living
     return NULL;
 }
 
-
-server::server(char* bindingPort, int backlog, int ifverbose)
+server::server(char* bindingPort, int backlog, int ifconnect, int cp, int ifverbose)
 {
 	Port = bindingPort;
 	Backlog = backlog;
+    connect = ifconnect;
+    connect_port = cp;
     verbose = ifverbose;
 	// pthread_mutex_init(&mutex, NULL);
     active_connect = 0;
+    if (connect){
+       
+    }
 }
 
 int server::serverGetaddrinfo()
@@ -222,9 +276,9 @@ int server::serverGetaddrinfo()
 	hints.ai_socktype = SOCK_STREAM; // set socket type as stream socket
 	hints.ai_flags = AI_PASSIVE; // fill in server host ip.
 	int r = getaddrinfo(NULL, const_cast<char*>(Port), &hints, &serverInfo);
-	if ((r != 0) && verbose){
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(r));
-	}
+    if ((r != 0) && verbose){
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(r));
+    }
 	return r;
 }
 
@@ -256,6 +310,7 @@ int server::serverBinding()
 		fprintf(stderr, "server: failed to bind socket.\n");
 		return 1;
 	}
+
 	freeaddrinfo(serverInfo);
 	return 0;
 }
@@ -271,8 +326,10 @@ void server::serverWorking()
     struct passedArg passedArg;
 	char s[INET6_ADDRSTRLEN];
 	struct sockaddr_storage their_addr; // connector's address information
-	socklen_t sin_size;
-    cout << "Now num. of working is: " << this->getActiveCon() << endl;
+    socklen_t sin_size;
+    int act = this->getActiveCon();
+    cout << "Now num. of working is: " << act << endl;
+
 	while (1){
 		// main accept() loop
 		// pthread_mutex_lock(&mutex);
@@ -316,5 +373,27 @@ void* server::get_in_addr(struct sockaddr *sa)
 int server::getActiveCon()
 {
     return active_connect;
+}
+
+void server::sendAciveCon()
+{
+    if (connect){
+        // side_socket = socket(AF_INET, SOCK_STREAM, 0);
+       
+        // LB_addr.sin_family = AF_INET;
+        // LB_addr.sin_addr.s_addr = inet_addr(DEST_IP);
+        // LB_addr.sin_port = htons(connect_port);
+        // connect(side_socket, (struct sockaddr*)&LB_addr, sizeof(struct sockaddr));
+        // if (test == -1)
+            // cout << "side control error!" << endl;
+        // char* buf;
+        // strcpy(buf, Port);
+        // char* act;
+        // sprintf(act, "%d", this->getActiveCon());
+        // strncpy(buf, " ", 1);
+        // strncpy(buf, act, strlen(act));
+        // send(side_socket, buf, sizeof(buf), 0);
+    }
+    return;
 }
 #endif

@@ -6,7 +6,7 @@
 int main(int argc, const char* argv[]){
 	FILE* pfile;
 	char command[30];
-	strcpy(command, "../../node -p");
+	strcpy(command, "../../node -p ");
 	strcat(command, argv[1]);
 	printf("excute %s\n", command);
 	pfile = popen(command, "r");
@@ -15,7 +15,7 @@ int main(int argc, const char* argv[]){
 		exit(1);
 	}
 	char c;
-	while(!feof(pfile)){
+	while(1){
 		c = getc(pfile);
 		printf("%c", c);
 	}

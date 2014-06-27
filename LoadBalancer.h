@@ -9,22 +9,12 @@
 
 using namespace std;
 
-#define DEST_IP "127.0.0.1"
-// using server_info to record the server ability and binded port
-struct server_info
-{
-	FILE* pfile;
-	char Port[10];
-	int active_con;
-	int ability;
-};
 
 class LoadBalancer : public server
 {
 private:
 	int max_visual_server; // record the max num of visual server
 
-	list<server_info> server_cluster; // record the avariable servers
 
 	void updateStatus(); // update server cluster status
 
@@ -34,6 +24,8 @@ public:
 	LoadBalancer(int max, char* bindingport, int backlog, int ifverbose);
 	~LoadBalancer();
 
+	list<server_info> server_cluster; // record the avariable servers
+	server* pcollector;
 	void bootServers();
 	
 	// for load balancer, we need overload the serverWorking function
@@ -60,7 +52,8 @@ void *loadBalance(void* param){
 	if(recv(client_socketid, client_buf, sizeof(client_buf), 0)>0) { 
 		// select the server with the least connection
 		// fill the destination server address
-		cout << "LB get query, servers status is: " << endl;
+		if (strncmp(client_buf, "GET",3) == 0){
+			cout << "LB get query, servers status is: " << endl;
 		pLB->printStatus();
 		sockaddr_in server_addr;
 		server_addr.sin_family = AF_INET;
@@ -88,14 +81,38 @@ void *loadBalance(void* param){
 		while(recv(proxy_socketid, server_buf, sizeof(server_buf), 0)>0){
 			send(client_socketid, server_buf, sizeof(server_buf), 0);
 		}
+		close(client_socketid);
 		close(proxy_socketid);
+		}
+		else{
+			// cout << "No get, goes to here " << client_buf << endl;
+			char server_nm[10];
+			char act_str[5];
+			char *p1=strchr(client_buf,' ');
+			// cout << "p1: " << p1 << endl;
+			strncpy(server_nm, client_buf, p1-client_buf);
+			// cout << "No get, goes to here, server_nm" << server_nm <<endl;
+			char *p2=client_buf + strlen(client_buf);
+			strncpy(act_str, p1+1, p2-p1-1);
+			// strcpy(act_str, p1);
+			cout << "server_nm: " << server_nm << " act_str: " << act_str << "a" <<endl;
+
+			list<server_info>::iterator it;
+        	for(it=pLB->server_cluster.begin(); !strcmp(it->Port, server_nm); it++);
+        	it->active_con = atoi(act_str);
+			close(client_socketid);
+		}
+		
 	}
+	pthread_exit(NULL);
+	return NULL;
 }
 LoadBalancer::LoadBalancer(int max, char* bindingport, int backlog, int ifverbose) : 
-	server(bindingport, backlog, ifverbose)
+	server(bindingport, backlog, 0, 0, ifverbose)
 {
 	max_visual_server = max;
 	// bootServers();
+	
 }
 
 void LoadBalancer::serverWorking(){
@@ -104,8 +121,6 @@ void LoadBalancer::serverWorking(){
 	struct sockaddr_storage their_addr; // connector's address information
 	socklen_t sin_size;
 	while (1){
-		// main accept() loop
-		// pthread_mutex_lock(&mutex);
 		sin_size = sizeof(their_addr);
 		loadBalanceArg.client_socketid = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
 		loadBalanceArg.pLB = this;
@@ -118,42 +133,8 @@ void LoadBalancer::serverWorking(){
 
         printStatus();
 		pthread_t id;
-        // active_connect++;
 		pthread_create(&id, NULL, loadBalance, &loadBalanceArg);
-		// char client_buf[4096];
-		// int len = recv(passedArg.new_fd, buf, sizeof(buf), 0);
-		// if(fork() == 0){
-			// in sub process
-			// create a new socket and conncet to selected server
-			// redict the client query to the selected server
-      		
-			// int sockfd_p;
-			// struct sockaddr_in dest_addr;
-			// sockfd_p = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-			// if (sockfd_p == -1){
-				// perror("socket()");
-				// exit(1);
-			// }
-
-			// setup connection info
-			// dest_addr.sin_family = AF_INET;              
-  			// dest_addr.sin_port = htons(selectServer());       
-  			// dest_addr.sin_addr.s_addr = inet_addr(DEST_IP); 
-  			// bzero(&(dest_addr.sin_zero), 8); 
-
-  			// if (connect(sockfd_p, (struct sockaddr*)&dest_addr, sizeof(struct sockaddr)) == -1){
-  				// perror("connect error!");
-  				// exit(1);
-  			// }
-  			// send(sockfd_p, buf, sizeof(buf), 0);
-  			// while(1){
-  				// if (recv(sockfd_p, buf, sizeof(buf), 0) > 0){
-  					// send(passedArg.new_fd, buf, sizeof(buf), 0);
-  				// }
-  			// }
-  			// close(sockfd_p);
-		// }
-        // (*passedArg.pActive)--;
+		// pcollector->changeServerInfoList(&server_cluster);
 	}
 	close(sockfd);
 	return;
@@ -162,24 +143,29 @@ void LoadBalancer::serverWorking(){
 void LoadBalancer::bootServers(){
 	int i, port;
 	port = atoi(Port);
+	char con_port[10];
+	sprintf(con_port, "%d", ++port);
 	char p[10];
 	struct server_info server_info;
 	char command[30];
 	// sprintf(command, sizeof(command), "./node -p ");
-	strcpy(command, "./node -p");
 	for (i=0; i<max_visual_server; i++){
+		strcpy(command, "./node -p ");
 		sprintf(p, "%d", ++port);
 		strcat(command, p);
+		strcat(command, " -c ");
+		// strcat(command, con_port);
+		strcat(command, Port);
 		server_info.pfile = popen(command, "r");
 		if (server_info.pfile == NULL){
 			i--;
 			break;
 		}
+		cout << "boot servers excute command: " << command << endl;
 		strcpy(server_info.Port, p);
 		server_info.active_con = 0;
 		server_info.ability = 1;
 		server_cluster.push_back(server_info);
-		strcpy(command, "./node -p");
 	}
 	return;
 }
@@ -187,7 +173,7 @@ int LoadBalancer::selectServer(){
 	int i;
 	char* p;
 	list<server_info>::iterator it;
-	updateStatus();
+	// updateStatus();
 	cout << "updateStatus OK!" << endl;
 	for (it=server_cluster.begin(), i=it->active_con, p=it->Port; it!=server_cluster.end(); it++){
 		if (i < it->active_con){
@@ -203,26 +189,7 @@ void LoadBalancer::updateStatus(){
 	list<server_info>::iterator it;
 	cout << "begin updateStatus.." << endl;
 	for (it=server_cluster.begin(); it!=server_cluster.end(); it++){
-		fseek(it->pfile, 0, SEEK_END);
-		char c;
-		long last = ftell(it->pfile);
-		long count;
-		char active[8] = {'\0'};
-		for(count = 1L; count <= last; count++)
-		{
-			fseek(it->pfile, -count, SEEK_END);
-			c = getc(it->pfile);
-			// if (isdigit(c)){
-				strncat(active, &c, 1);
-			// }
-			// if (c == ' ')
-				// break;
-		}
-		// reverse the active
-		strRev(active);
-		cout << it->Port << " active: " << active << endl;
-		it->active_con = atoi(active);
-		cout << it->Port << " active_num: " << it->active_con << endl;
+		
 	}
 	return;
 }

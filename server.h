@@ -2,6 +2,7 @@
 #define SERVER_H
 
 #include <iostream>
+#include <list>
 #include <sys/stat.h> // POSIX system call, return file attributes
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -19,13 +20,20 @@
 using namespace std;
 
 const char PATH[] = "./www"; // set www path
+// using server_info to record the server ability and binded port
+
+struct server_info
+{
+    FILE* pfile;
+    char Port[10];
+    int active_con;
+    int ability;
+};
 
 class server
 {
 private:
     int Backlog; // the num of connections allowed on the incoming queue
-
-    // pthread_mutex_t mutex;   
 
     // socket info. port, IP...
     struct addrinfo hints;  
@@ -33,24 +41,13 @@ private:
     // server socket info. port, IP...
     struct addrinfo *serverInfo;
 
-    // handle query
-    // void *respQuery(void * param){
-        // return;
-    // }
 protected:
     
-
     int active_connect; // the active connect , reflect the work load of this server
 
     int sockfd; // the socket file descriptor
 
-    int side_socket; // the side socket file descriptor, to commu. with LB or other severs 
-
     int verbose; // wheter to display verbose messages
-
-
-
-    sockaddr_in LB_addr;
 
     // get sockaddr, IPv4 or IPv6:
     void *get_in_addr(struct sockaddr *sa);
@@ -77,6 +74,8 @@ public:
     // coninuous working, to accept the connection from clients, send and receive msg
     void serverWorking();
 
+    void changeServerInfoList(list<server_info> *plist);
+
     // get the number of active connection
     int getActiveCon();
 
@@ -95,35 +94,15 @@ struct passedArg
 
 void *respHttpQuery(void *param) 
 {
-    int side_socket;
-    sockaddr_in LB_addr;
-    side_socket = socket(AF_INET, SOCK_STREAM, 0);
-       
         
     int fd2 = ((passedArg*) param)->new_fd;     //the client sockid
     int* pActive = ((passedArg*) param)->pActive;
     int verbose = ((passedArg*) param)->verbose;
     server* pserver = ((passedArg*) param)->pserver;
 
-    LB_addr.sin_family = AF_INET;
-    LB_addr.sin_addr.s_addr = inet_addr(DEST_IP);
-    LB_addr.sin_port = htons(pserver->connect_port);
-
+   
     (*pActive)++;
-    // pserver->sendAciveCon();
-    if (pserver->connect){
-        int test = connect(side_socket, (struct sockaddr*)&LB_addr, sizeof(struct sockaddr));
-        if (test == -1)
-            cout << "connect error" << endl;
-        char side_buf[40];
-        strcpy(side_buf, pserver->Port);
-        char act[20];
-        sprintf(act, "%d", pserver->getActiveCon());
-        strncat(side_buf, " ", 1);
-        strncat(side_buf, act, strlen(act));
-        cout << "send LB msg: " << side_buf << endl;
-        send(side_socket, side_buf, sizeof(side_buf), 0);
-    }
+    pserver->sendAciveCon();
     cout << "Now num. of working is: " << pserver->getActiveCon() << endl;
     char buf[1024]; // buffer to save the query
     if(recv(fd2, buf, sizeof(buf), 0)>0) {  
@@ -161,22 +140,6 @@ void *respHttpQuery(void *param)
             	int len = strlen(webname) - 1;
             	strncpy(sleep, p2+6, p3-p2-6);
             	int sleep_time = atoi(sleep);
-            	// cout << "p2: " << p2 << endl;
-            	// cout << "p3: " << p3 << endl;
-            	// cout << "predict sleep time is: " << sleep << "&"<< sleep_time << endl;
-            	// sleep(sleep_time);
-            	// wait(3);
-            	// clock_t start, end;
-            	// double elapsed;
-            	// start = clock();
-            	// while(1){
-            		// len = 1;
-            		// end = clock();
-            		// elapsed = (double)(end - start);
-            		// cout << "elapsed: " << elapsed << endl;
-            		// if (elapsed > sleep_time * 100000)
-            			// break;
-            	// }
                 usleep(sleep_time * 1000000);
             	strcpy(webname, trueWebName);
             }
@@ -235,21 +198,7 @@ void *respHttpQuery(void *param)
         }
     }
     (*pActive)--;
-    if (pserver->connect){
-        side_socket = socket(AF_INET, SOCK_STREAM, 0);
-        int test = connect(side_socket, (struct sockaddr*)&LB_addr, sizeof(struct sockaddr));
-        if (test == -1)
-            cout << "decrease and send error" << endl;
-        char side_buf[40];
-        strcpy(side_buf, pserver->Port);
-        char act[20];
-        sprintf(act, "%d", pserver->getActiveCon());
-        strncat(side_buf, " ", 1);
-        strncat(side_buf, act, strlen(act));
-        cout << "send LB msg: " << side_buf << endl;
-        send(side_socket, side_buf, sizeof(side_buf), 0);
-    }
-    // pserver->sendAciveCon();
+    pserver->sendAciveCon();
     cout << "Now num. of working is: " << pserver->getActiveCon() << endl;
     pthread_exit(NULL); // noted this to keep server living
     return NULL;
@@ -322,7 +271,6 @@ int server::serverListening()
 
 void server::serverWorking()
 {
-	// int new_fd;
     struct passedArg passedArg;
 	char s[INET6_ADDRSTRLEN];
 	struct sockaddr_storage their_addr; // connector's address information
@@ -355,6 +303,42 @@ void server::serverWorking()
 	return;
 }
 
+void server::changeServerInfoList(list<server_info> *plist)
+{
+    int new_fd;
+    char s[INET6_ADDRSTRLEN];
+    char buf[1024];
+    struct sockaddr_storage their_addr; // connector's address information
+    socklen_t sin_size;
+
+    sin_size = sizeof(their_addr);
+    new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
+    if (new_fd == -1 && verbose){
+        perror("accept");
+    }
+    inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
+    if (verbose)
+        cout << "server: got connection from " << s << endl;
+
+    FILE* ptmp; // using tmp file to make this easier
+    ptmp = fopen("tmp.data", "w+");
+    while(recv(new_fd, buf, sizeof(buf), 0) > 0){
+        cout << "collector: " << buf << endl;
+        fprintf(ptmp, "%s", buf);
+    }
+    fclose(ptmp);
+    char port_str[10];
+    int active;
+    ptmp = fopen("tmp.data", "r");
+    while(!feof(ptmp)){
+        fscanf(ptmp, "%s %d\n", port_str, &active);
+        // find the port_str in the list
+        list<server_info>::iterator it;
+        for(it=plist->begin(); !strcmp(it->Port, port_str); it++);
+        it->active_con = active;
+    }
+    return;
+}
 void server::test()
 {
 	cout << Port << endl;
@@ -378,21 +362,24 @@ int server::getActiveCon()
 void server::sendAciveCon()
 {
     if (connect){
-        // side_socket = socket(AF_INET, SOCK_STREAM, 0);
+    int side_socket;
+    sockaddr_in LB_addr;
+        side_socket = socket(AF_INET, SOCK_STREAM, 0);
        
-        // LB_addr.sin_family = AF_INET;
-        // LB_addr.sin_addr.s_addr = inet_addr(DEST_IP);
-        // LB_addr.sin_port = htons(connect_port);
-        // connect(side_socket, (struct sockaddr*)&LB_addr, sizeof(struct sockaddr));
-        // if (test == -1)
-            // cout << "side control error!" << endl;
-        // char* buf;
-        // strcpy(buf, Port);
-        // char* act;
-        // sprintf(act, "%d", this->getActiveCon());
-        // strncpy(buf, " ", 1);
-        // strncpy(buf, act, strlen(act));
-        // send(side_socket, buf, sizeof(buf), 0);
+        LB_addr.sin_family = AF_INET;
+        LB_addr.sin_addr.s_addr = inet_addr(DEST_IP);
+        LB_addr.sin_port = htons(connect_port);
+        ::connect(side_socket, (struct sockaddr*)&LB_addr, sizeof(struct sockaddr));
+        int test;
+        if (test == -1)
+            cout << "side control error!" << endl;
+        char buf[40];
+        strcpy(buf, Port);
+        char act[20];
+        sprintf(act, "%d", this->getActiveCon());
+        strncat(buf, " ", 1);
+        strncat(buf, act, strlen(act));
+        send(side_socket, buf, sizeof(buf), 0);
     }
     return;
 }

@@ -15,11 +15,6 @@ class LoadBalancer : public server
 private:
 	int max_visual_server; // record the max num of visual server
 
-
-	void updateStatus(); // update server cluster status
-
-	void strRev(char* s); // reverse the string
-
 public:
 	LoadBalancer(int max, char* bindingport, int backlog, int ifverbose);
 	~LoadBalancer();
@@ -76,7 +71,6 @@ void *loadBalance(void* param){
 		send(proxy_socketid, client_buf, sizeof(client_buf), 0);
 
 		cout << "LB handled query, servers status is: " << endl;
-		pLB->printStatus();
 		char server_buf[4096]; 
 		while(recv(proxy_socketid, server_buf, sizeof(server_buf), 0)>0){
 			send(client_socketid, server_buf, sizeof(server_buf), 0);
@@ -95,11 +89,12 @@ void *loadBalance(void* param){
 			char *p2=client_buf + strlen(client_buf);
 			strncpy(act_str, p1+1, p2-p1-1);
 			// strcpy(act_str, p1);
-			cout << "server_nm: " << server_nm << " act_str: " << act_str << "a" <<endl;
+			cout << "server_nm: " << server_nm << " act_str: " << act_str <<endl;
 
 			list<server_info>::iterator it;
-        	for(it=pLB->server_cluster.begin(); !strcmp(it->Port, server_nm); it++);
+        	for(it=pLB->server_cluster.begin(); strcmp(it->Port, server_nm) != 0; it++);
         	it->active_con = atoi(act_str);
+			pLB->printStatus();
 			close(client_socketid);
 		}
 		
@@ -111,7 +106,6 @@ LoadBalancer::LoadBalancer(int max, char* bindingport, int backlog, int ifverbos
 	server(bindingport, backlog, 0, 0, ifverbose)
 {
 	max_visual_server = max;
-	// bootServers();
 	
 }
 
@@ -129,12 +123,9 @@ void LoadBalancer::serverWorking(){
 			continue;
 		}
 		inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
-		cout << "server: got connection from " << s << endl;
-
-        printStatus();
+		// cout << "server: got connection from " << s << endl;
 		pthread_t id;
 		pthread_create(&id, NULL, loadBalance, &loadBalanceArg);
-		// pcollector->changeServerInfoList(&server_cluster);
 	}
 	close(sockfd);
 	return;
@@ -174,9 +165,9 @@ int LoadBalancer::selectServer(){
 	char* p;
 	list<server_info>::iterator it;
 	// updateStatus();
-	cout << "updateStatus OK!" << endl;
+	// cout << "updateStatus OK!" << endl;
 	for (it=server_cluster.begin(), i=it->active_con, p=it->Port; it!=server_cluster.end(); it++){
-		if (i < it->active_con){
+		if (i > it->active_con){
 			i = it->active_con;
 			p = it->Port;
 		}
@@ -185,32 +176,12 @@ int LoadBalancer::selectServer(){
 	return atoi(p);
 }
 
-void LoadBalancer::updateStatus(){
-	list<server_info>::iterator it;
-	cout << "begin updateStatus.." << endl;
-	for (it=server_cluster.begin(); it!=server_cluster.end(); it++){
-		
-	}
-	return;
-}
-
 void LoadBalancer::printStatus(){
 	list<server_info>::iterator it;
 	for (it=server_cluster.begin(); it!=server_cluster.end(); it++){
 		printf("%s/%d ", it->Port, it->active_con);
 	}
 	printf("\n");
-	return;
-}
-void LoadBalancer::strRev(char* s){
-	char tmp, *end = s + strlen(s) -1;
-	while(end > s){
-		tmp = *s;
-		*s = *end;
-		*end = tmp;
-		--end;
-		++s;
-	}
 	return;
 }
 #endif

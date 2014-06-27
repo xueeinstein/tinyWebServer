@@ -74,8 +74,6 @@ public:
     // coninuous working, to accept the connection from clients, send and receive msg
     void serverWorking();
 
-    void changeServerInfoList(list<server_info> *plist);
-
     // get the number of active connection
     int getActiveCon();
 
@@ -100,7 +98,6 @@ void *respHttpQuery(void *param)
     int verbose = ((passedArg*) param)->verbose;
     server* pserver = ((passedArg*) param)->pserver;
 
-   
     (*pActive)++;
     pserver->sendAciveCon();
     cout << "Now num. of working is: " << pserver->getActiveCon() << endl;
@@ -213,9 +210,6 @@ server::server(char* bindingPort, int backlog, int ifconnect, int cp, int ifverb
     verbose = ifverbose;
 	// pthread_mutex_init(&mutex, NULL);
     active_connect = 0;
-    if (connect){
-       
-    }
 }
 
 int server::serverGetaddrinfo()
@@ -303,42 +297,6 @@ void server::serverWorking()
 	return;
 }
 
-void server::changeServerInfoList(list<server_info> *plist)
-{
-    int new_fd;
-    char s[INET6_ADDRSTRLEN];
-    char buf[1024];
-    struct sockaddr_storage their_addr; // connector's address information
-    socklen_t sin_size;
-
-    sin_size = sizeof(their_addr);
-    new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
-    if (new_fd == -1 && verbose){
-        perror("accept");
-    }
-    inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr *)&their_addr), s, sizeof s);
-    if (verbose)
-        cout << "server: got connection from " << s << endl;
-
-    FILE* ptmp; // using tmp file to make this easier
-    ptmp = fopen("tmp.data", "w+");
-    while(recv(new_fd, buf, sizeof(buf), 0) > 0){
-        cout << "collector: " << buf << endl;
-        fprintf(ptmp, "%s", buf);
-    }
-    fclose(ptmp);
-    char port_str[10];
-    int active;
-    ptmp = fopen("tmp.data", "r");
-    while(!feof(ptmp)){
-        fscanf(ptmp, "%s %d\n", port_str, &active);
-        // find the port_str in the list
-        list<server_info>::iterator it;
-        for(it=plist->begin(); !strcmp(it->Port, port_str); it++);
-        it->active_con = active;
-    }
-    return;
-}
 void server::test()
 {
 	cout << Port << endl;

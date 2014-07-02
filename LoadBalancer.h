@@ -7,8 +7,9 @@
 #include <errno.h>
 #include "server.h"
 
-using namespace std;
+#define LOG(lf, msg) fprintf(lf, "%f\n", (msg))
 
+using namespace std;
 
 class LoadBalancer : public server
 {
@@ -48,35 +49,44 @@ void *loadBalance(void* param){
 		// select the server with the least connection
 		// fill the destination server address
 		if (strncmp(client_buf, "GET",3) == 0){
+			FILE *log = fopen("log.log", "a");
+			clock_t t1, t2;
+			t1 = clock();
 			cout << "LB get query, servers status is: " << endl;
-		pLB->printStatus();
-		sockaddr_in server_addr;
-		server_addr.sin_family = AF_INET;
-		server_addr.sin_addr.s_addr = inet_addr(DEST_IP);
-		server_addr.sin_port = htons(pLB->selectServer());
-		// bzero(&(server_addr.sin_zero), 8);
+			pLB->printStatus();
+			sockaddr_in server_addr;
+			server_addr.sin_family = AF_INET;
+			server_addr.sin_addr.s_addr = inet_addr(DEST_IP);
+			server_addr.sin_port = htons(pLB->selectServer());
+			// bzero(&(server_addr.sin_zero), 8);
 
-		int proxy_socketid = socket(AF_INET, SOCK_STREAM, 0);
-		if (proxy_socketid == -1)
-			cout << "proxy_socketid error!" << endl;
-		cout << "LB begin to proxy" << endl;
-		// here error!!! unable to 
-		int test = connect(proxy_socketid, (struct sockaddr*)&server_addr, sizeof(struct sockaddr));
+			int proxy_socketid = socket(AF_INET, SOCK_STREAM, 0);
+			if (proxy_socketid == -1)
+				cout << "proxy_socketid error!" << endl;
+			cout << "LB begin to proxy" << endl;
+			// here error!!! unable to 
+			int test = connect(proxy_socketid, (struct sockaddr*)&server_addr, sizeof(struct sockaddr));
 
-		if (test == -1)
-			cout << "LB connect server error!" << endl;
-		cout << errno << endl;
+			if (test == -1)
+				cout << "LB connect server error!" << endl;
+			// cout << errno << endl;
 		
-		// send the query from client to the selected server
-		send(proxy_socketid, client_buf, sizeof(client_buf), 0);
+			// send the query from client to the selected server
+			send(proxy_socketid, client_buf, sizeof(client_buf), 0);
 
-		cout << "LB handled query, servers status is: " << endl;
-		char server_buf[4096]; 
-		while(recv(proxy_socketid, server_buf, sizeof(server_buf), 0)>0){
-			send(client_socketid, server_buf, sizeof(server_buf), 0);
-		}
-		close(client_socketid);
-		close(proxy_socketid);
+			cout << "LB handled query, servers status is: " << endl;
+			char server_buf[4096]; 
+			while(recv(proxy_socketid, server_buf, sizeof(server_buf), 0)>0){
+				send(client_socketid, server_buf, sizeof(server_buf), 0);
+			}
+
+			t2 = clock();
+			float diff = (((float)t2 - (float)t1) / 1000000.0F ) * 1000;   
+			cout << diff << endl;
+			LOG(log, diff);
+			fclose(log);
+			close(client_socketid);
+			close(proxy_socketid);
 		}
 		else{
 			// cout << "No get, goes to here " << client_buf << endl;
@@ -96,8 +106,7 @@ void *loadBalance(void* param){
         	it->active_con = atoi(act_str);
 			pLB->printStatus();
 			close(client_socketid);
-		}
-		
+		}	
 	}
 	pthread_exit(NULL);
 	return NULL;

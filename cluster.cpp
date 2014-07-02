@@ -9,7 +9,7 @@ int main(){
 	char p[20];
 	cout << "Please input the port that you want to bind: ";
 	cin >> p;
-	LoadBalancer* LB = new LoadBalancer(2, p, 5, 1);
+	LoadBalancer* LB = new LoadBalancer(4, p, 5, 1);
 	int port_num = atoi(p);
 	char port_str[10];
 	sprintf(port_str, "%d", ++port_num);

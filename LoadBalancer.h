@@ -18,10 +18,11 @@ private:
 
 public:
 	LoadBalancer(int max, char* bindingport, int backlog, int ifverbose);
+
 	~LoadBalancer();
 
 	list<server_info> server_cluster; // record the avariable servers
-	server* pcollector;
+
 	void bootServers();
 	
 	// for load balancer, we need overload the serverWorking function
@@ -79,7 +80,7 @@ void *loadBalance(void* param){
 			while(recv(proxy_socketid, server_buf, sizeof(server_buf), 0)>0){
 				send(client_socketid, server_buf, sizeof(server_buf), 0);
 			}
-
+			// calculate response time and log
 			t2 = clock();
 			float diff = (((float)t2 - (float)t1) / 1000000.0F ) * 1000;   
 			cout << diff << endl;

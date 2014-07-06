@@ -15,11 +15,10 @@ void print_usage(FILE* stream, int exit_code)
 	fprintf(stream, 
 		"	-h --help				Display this usage information.\n"
 		"	-p --port port_num			The port to bind.\n"
-		"	-o --output filename 			Write output to file.\n"
 		"	-v --verbose				Print verbose messages.\n"
 		"	-c --connect LB				connect the Load Balancer.\n");
 	exit(exit_code);
-}
+	}
 int main(int argc, char* argv[]){
 	int i;
 	int next_option;
@@ -29,13 +28,11 @@ int main(int argc, char* argv[]){
 	const struct option long_options[] = {
 		{"help", 0, NULL, 'h'},
 		{"port", 1, NULL, 'p'},
-		{"output", 1, NULL, 'o'},
 		{"verbose", 0, NULL, 'v'},
 		{"connect", 1, NULL, 'c'},
 		{NULL, 0, NULL, 0}
 	};
 	char* binding_port = NULL;
-	const char* output_filename = NULL;
 	int verbose = 0; // wheter to display verbose messages
 	int LB_port = 0;
 	int ifconnect = 0;
@@ -49,9 +46,6 @@ int main(int argc, char* argv[]){
 				break;
 			case 'p':
 				binding_port = optarg;
-				break;
-			case 'o':
-				output_filename = optarg;
 				break;
 			case 'v':
 				verbose = 1;
@@ -89,16 +83,6 @@ int main(int argc, char* argv[]){
 		}
 	}
 	cout << "press Ctrl + C to exit server." << endl;
-	// if (fork() == 0)
-		s->serverWorking();
-	// else{
-		// while(1){
-			// system("curl http://localhost:8088/index.html?sleep=5");
-			// cout << "Active Connection Num: " << s->getActiveCon() << endl;
-			// sleep(1);
-		// }
-	// }
-
-	//generate simulated client processes
+	s->serverWorking();
 	return 0;
 }

@@ -77,7 +77,7 @@ public:
     // get the number of active connection
     int getActiveCon();
 
-    void sendAciveCon();
+    void sendActiveCon();
 
     void test();
 };
@@ -99,7 +99,7 @@ void *respHttpQuery(void *param)
     server* pserver = ((passedArg*) param)->pserver;
 
     (*pActive)++;
-    pserver->sendAciveCon();
+    pserver->sendActiveCon();
     cout << "Now num. of working is: " << pserver->getActiveCon() << endl;
     char buf[1024]; // buffer to save the query
     if(recv(fd2, buf, sizeof(buf), 0)>0) {  
@@ -195,7 +195,7 @@ void *respHttpQuery(void *param)
         }
     }
     (*pActive)--;
-    pserver->sendAciveCon();
+    pserver->sendActiveCon();
     cout << "Now num. of working is: " << pserver->getActiveCon() << endl;
     pthread_exit(NULL); // noted this to keep server living
     return NULL;
@@ -317,7 +317,7 @@ int server::getActiveCon()
     return active_connect;
 }
 
-void server::sendAciveCon()
+void server::sendActiveCon()
 {
     if (connect){
     int side_socket;

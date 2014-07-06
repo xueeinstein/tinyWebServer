@@ -1,17 +1,23 @@
 import numpy as np
-# analysis the average reponse time of 4-nodes cluster
-array1 = [];
-array1 = np.genfromtxt("log-4.log",delimiter="\n")
-print array1
-total1 = np.sum(array1)
-print "4-nodes cluster average reponse time: " 
-print total1 / len(array1)
+import matplotlib.pyplot as plt 
+import string
 
-# analysis the average reponse time of 2-nodes cluster
-array2 = [];
-array2 = np.genfromtxt("log-2.log",delimiter="\n")
-print array2
-total2 = np.sum(array2)
-print "2-nodes cluster average reponse time: " 
-print total2 / len(array2)
+n = raw_input("Please input the max server num: ")
+n = string.atoi(n, 10)
+x = np.linspace(1, n, n)
+y = []
+arrays = [[] for i in range(n)]
+for i in range(n):
+	arrays[i] = np.genfromtxt("log-"+str(i+1)+".log",delimiter="\n")
+	# print str(i+1)+"-nodes cluster average reponse time: "
+	average_time = np.sum(arrays[i]) / len(arrays[i])
+	y.append(average_time)
+print x
+print y
+plt.plot(x, y, color="red", linewidth=2)
+plt.xlabel("Num of Servers")
+plt.ylabel("Average Respon Time(s)")
+plt.ylim(3, 7)
+plt.xlim(0.5, 6.5)
 
+plt.show()

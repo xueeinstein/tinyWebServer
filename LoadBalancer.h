@@ -35,6 +35,7 @@ public:
 	// print server cluster list info
 	void printStatus();
 
+	int getServersNum();
 };
 
 struct loadBalanceArg
@@ -50,7 +51,9 @@ void *loadBalance(void* param){
 		// select the server with the least connection
 		// fill the destination server address
 		if (strncmp(client_buf, "GET",3) == 0){
-			FILE *log = fopen("log.log", "a");
+			char logfilename[20];
+			sprintf(logfilename, "%s-%d.log", "log", pLB->getServersNum());
+			FILE *log = fopen(logfilename, "a");
 			clock_t t1, t2;
 			t1 = clock();
 			cout << "LB get query, servers status is: " << endl;
@@ -193,5 +196,8 @@ void LoadBalancer::printStatus(){
 	}
 	printf("\n");
 	return;
+}
+int LoadBalancer::getServersNum(){
+	return max_visual_server;
 }
 #endif
